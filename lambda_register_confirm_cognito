@@ -1,15 +1,15 @@
-
 import json
 import boto3
 import hmac
 import hashlib
 import base64
 import os
-import psycopg2
 from botocore.exceptions import ClientError
 
+# Inicializa o cliente do Cognito
 cognito = boto3.client('cognito-idp')
 
+# Função para calcular o Secret Hash
 def calculate_secret_hash(client_id, client_secret, username):
     message = username + client_id
     dig = hmac.new(
@@ -19,77 +19,42 @@ def calculate_secret_hash(client_id, client_secret, username):
     ).digest()
     return base64.b64encode(dig).decode()
 
-def get_secret(secret_name):
-    # Create a Secrets Manager client
-    client = boto3.client('secretsmanager')
-
-    try:
-        # Retrieve the secret value
-        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-        secret = json.loads(get_secret_value_response['SecretString'])
-        return secret
-    except ClientError as e:
-        raise Exception(f"Error retrieving secret: {e}")
-
 def lambda_handler(event, context):
-    body = event['body']
+    # Verifica se o 'body' é uma string e o converte para JSON
+    if isinstance(event['body'], str):
+        body = json.loads(event['body'])
+    else:
+        body = event['body']
+
+    # Obtém os parâmetros do corpo da requisição
     username = body['username']
     confirmation_code = body['confirmation_code']
 
+    # Obtém as variáveis de ambiente para o Client ID e Secret
     client_id = os.environ['client_id']
     client_secret = os.environ['client_secret']
-    secret_name = os.environ['secret_name']  # The name of the secret in Secrets Manager
 
+    # Calcula o SecretHash
     secret_hash = calculate_secret_hash(client_id, client_secret, username)
 
     try:
-        # Confirm the user's sign-up
-        cognito.confirm_sign_up(
+        # Chama o método confirm_sign_up do Cognito com o SecretHash
+        response = cognito.confirm_sign_up(
             ClientId=client_id,
             Username=username,
             ConfirmationCode=confirmation_code,
             SecretHash=secret_hash
         )
 
-        # Retrieve database credentials from Secrets Manager
-        secret = get_secret(secret_name)
-        db_host = secret['host']
-        db_name = secret['dbname']
-        db_user = secret['username']
-        db_password = secret['password']
-        db_port = secret.get('port', 5432)  # Default PostgreSQL port
-
-        # Connect to the PostgreSQL database
-        connection = psycopg2.connect(
-            host=db_host,
-            database=db_name,
-            user=db_user,
-            password=db_password,
-            port=db_port
-        )
-        cursor = connection.cursor()
-
-        # Insert the user into the customer table
-        insert_query = """
-        INSERT INTO customer (username) VALUES (%s)
-        """
-        cursor.execute(insert_query, (username,))
-        connection.commit()
-
-        cursor.close()
-        connection.close()
-
+        # Retorna uma resposta de sucesso se a confirmação for bem-sucedida
         return {
             'statusCode': 200,
-            'body': json.dumps({'message': 'User confirmed and registered successfully'})
+            'body': json.dumps({'message': 'User confirmed successfully'})
         }
+
     except ClientError as error:
+        # Em caso de erro, retorna uma mensagem de erro
         return {
             'statusCode': 400,
             'body': json.dumps({'error': error.response['Error']['Message']})
-        }
-    except psycopg2.Error as db_error:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(db_error)})
         }
