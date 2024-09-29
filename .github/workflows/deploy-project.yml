@@ -51,7 +51,7 @@ jobs:
   deploy:
     needs: trivy-scan
     if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
-    uses: team-tech-challenge/terraform-reusable-actions/.github/workflows/create-resources-with-terraform.yml@main
+    uses: team-tech-challenge/terraform-reusable-actions/.github/workflows/create-lambda-aws.yml@feat/adds-news-workflows
     with:
       environment: 'production'
     secrets:
@@ -59,6 +59,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
       WORKING_DIRECTORY: ${{ secrets.WORKING_DIRECTORY }}
       TF_BACKEND_KEY: ${{ secrets.TF_BACKEND_KEY }}
       TF_BACKEND_REGION: ${{ secrets.TF_BACKEND_REGION }}
