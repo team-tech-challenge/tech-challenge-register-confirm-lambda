@@ -6,10 +6,8 @@ import base64
 import os
 from botocore.exceptions import ClientError
 
-# Inicializa o cliente do Cognito
 cognito = boto3.client('cognito-idp')
 
-# Função para calcular o Secret Hash
 def calculate_secret_hash(client_id, client_secret, username):
     message = username + client_id
     dig = hmac.new(
@@ -19,41 +17,35 @@ def calculate_secret_hash(client_id, client_secret, username):
     ).digest()
     return base64.b64encode(dig).decode()
 
+
 def lambda_handler(event, context):
-    # Verifica se o 'body' é uma string e o converte para JSON
+
     if isinstance(event['body'], str):
         body = json.loads(event['body'])
     else:
         body = event['body']
 
-    # Obtém os parâmetros do corpo da requisição
     username = body['username']
     confirmation_code = body['confirmation_code']
 
-    # Obtém as variáveis de ambiente para o Client ID e Secret
     client_id = os.environ['client_id']
     client_secret = os.environ['client_secret']
 
-    # Calcula o SecretHash
     secret_hash = calculate_secret_hash(client_id, client_secret, username)
 
     try:
-        # Chama o método confirm_sign_up do Cognito com o SecretHash
+        # Confirm the user's sign-up
         response = cognito.confirm_sign_up(
             ClientId=client_id,
             Username=username,
             ConfirmationCode=confirmation_code,
             SecretHash=secret_hash
         )
-
-        # Retorna uma resposta de sucesso se a confirmação for bem-sucedida
         return {
             'statusCode': 200,
-            'body': json.dumps({'message': 'User confirmed successfully'})
+            'body': json.dumps({'message': 'User confirmed and registered successfully'})
         }
-
     except ClientError as error:
-        # Em caso de erro, retorna uma mensagem de erro
         return {
             'statusCode': 400,
             'body': json.dumps({'error': error.response['Error']['Message']})
